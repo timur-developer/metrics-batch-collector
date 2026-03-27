@@ -8,13 +8,13 @@ import (
 )
 
 func TestPostEventsAccepted(t *testing.T) {
-	mux := NewMux(NewInMemoryEventService())
+	router := NewRouter(NewInMemoryEventService())
 
 	body := `{"event_type":"page_view","source":"landing","user_id":"u123","value":0,"created_at":"2026-03-27T12:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("expected status %d, got %d", http.StatusAccepted, rec.Code)
@@ -22,13 +22,13 @@ func TestPostEventsAccepted(t *testing.T) {
 }
 
 func TestPostEventsValidationError(t *testing.T) {
-	mux := NewMux(NewInMemoryEventService())
+	router := NewRouter(NewInMemoryEventService())
 
 	body := `{"source":"landing","user_id":"u123","value":1,"created_at":"2026-03-27T12:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -40,13 +40,13 @@ func TestPostEventsValidationError(t *testing.T) {
 }
 
 func TestPostEventsRejectsMultipleJSONObjects(t *testing.T) {
-	mux := NewMux(NewInMemoryEventService())
+	router := NewRouter(NewInMemoryEventService())
 
 	body := `{"event_type":"page_view","source":"landing","user_id":"u123","value":1,"created_at":"2026-03-27T12:00:00Z"}{"event_type":"click","source":"landing","user_id":"u124","value":2,"created_at":"2026-03-27T12:00:01Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
@@ -58,12 +58,12 @@ func TestPostEventsRejectsMultipleJSONObjects(t *testing.T) {
 }
 
 func TestHealthz(t *testing.T) {
-	mux := NewMux(NewInMemoryEventService())
+	router := NewRouter(NewInMemoryEventService())
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
@@ -71,12 +71,12 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestMetricsEndpoint(t *testing.T) {
-	mux := NewMux(NewInMemoryEventService())
+	router := NewRouter(NewInMemoryEventService())
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)

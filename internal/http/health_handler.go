@@ -2,11 +2,6 @@ package http
 
 import "net/http"
 
-func healthzHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w, http.MethodGet)
-		return
-	}
-
+func healthzHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

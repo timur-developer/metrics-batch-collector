@@ -27,11 +27,6 @@ func NewEventHandler(service EventService) *EventHandler {
 }
 
 func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeMethodNotAllowed(w, http.MethodPost)
-		return
-	}
-
 	event, err := decodeEvent(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

@@ -24,7 +24,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           apphttp.NewMux(eventService),
+		Handler:           apphttp.NewRouter(eventService),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
