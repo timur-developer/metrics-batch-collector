@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"metrics-batch-collector/internal/event"
 )
 
 type EventHandler struct {
@@ -27,13 +29,13 @@ func NewEventHandler(service EventService) *EventHandler {
 }
 
 func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	event, err := decodeEvent(r)
+	evt, err := decodeEvent(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if err := h.service.Accept(r.Context(), event); err != nil {
+	if err := h.service.Accept(r.Context(), evt); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to accept event")
 		return
 	}
@@ -41,7 +43,7 @@ func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
-func decodeEvent(r *http.Request) (Event, error) {
+func decodeEvent(r *http.Request) (event.Event, error) {
 	defer r.Body.Close()
 
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
@@ -50,60 +52,60 @@ func decodeEvent(r *http.Request) (Event, error) {
 	var request eventRequest
 	if err := decoder.Decode(&request); err != nil {
 		if errors.Is(err, io.EOF) {
-			return Event{}, errors.New("invalid request body")
+			return event.Event{}, errors.New("invalid request body")
 		}
 
 		var syntaxErr *json.SyntaxError
 		var typeErr *json.UnmarshalTypeError
 		switch {
 		case errors.As(err, &syntaxErr):
-			return Event{}, errors.New("invalid request body")
+			return event.Event{}, errors.New("invalid request body")
 		case errors.As(err, &typeErr):
-			return Event{}, fmt.Errorf("invalid field type: %s", typeErr.Field)
+			return event.Event{}, fmt.Errorf("invalid field type: %s", typeErr.Field)
 		case strings.Contains(err.Error(), "unknown field"):
-			return Event{}, errors.New("invalid request body")
+			return event.Event{}, errors.New("invalid request body")
 		default:
-			return Event{}, errors.New("invalid request body")
+			return event.Event{}, errors.New("invalid request body")
 		}
 	}
 
 	var extra json.RawMessage
 	if err := decoder.Decode(&extra); err == nil {
-		return Event{}, errors.New("invalid request body")
+		return event.Event{}, errors.New("invalid request body")
 	} else if !errors.Is(err, io.EOF) {
-		return Event{}, errors.New("invalid request body")
+		return event.Event{}, errors.New("invalid request body")
 	}
 
-	event, err := validateEvent(request)
+	evt, err := validateEvent(request)
 	if err != nil {
-		return Event{}, err
+		return event.Event{}, err
 	}
 
-	return event, nil
+	return evt, nil
 }
 
-func validateEvent(request eventRequest) (Event, error) {
+func validateEvent(request eventRequest) (event.Event, error) {
 	if request.EventType == nil || strings.TrimSpace(*request.EventType) == "" {
-		return Event{}, errors.New("missing required field: event_type")
+		return event.Event{}, errors.New("missing required field: event_type")
 	}
 
 	if request.Source == nil || strings.TrimSpace(*request.Source) == "" {
-		return Event{}, errors.New("missing required field: source")
+		return event.Event{}, errors.New("missing required field: source")
 	}
 
 	if request.UserID == nil || strings.TrimSpace(*request.UserID) == "" {
-		return Event{}, errors.New("missing required field: user_id")
+		return event.Event{}, errors.New("missing required field: user_id")
 	}
 
 	if request.Value == nil {
-		return Event{}, errors.New("missing required field: value")
+		return event.Event{}, errors.New("missing required field: value")
 	}
 
 	if request.CreatedAt == nil || request.CreatedAt.IsZero() {
-		return Event{}, errors.New("missing required field: created_at")
+		return event.Event{}, errors.New("missing required field: created_at")
 	}
 
-	return Event{
+	return event.Event{
 		EventType: strings.TrimSpace(*request.EventType),
 		Source:    strings.TrimSpace(*request.Source),
 		UserID:    strings.TrimSpace(*request.UserID),

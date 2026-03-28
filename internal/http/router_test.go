@@ -1,14 +1,17 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"metrics-batch-collector/internal/event"
 )
 
 func TestPostEventsAccepted(t *testing.T) {
-	router := NewRouter(NewInMemoryEventService())
+	router := NewRouter(eventServiceStub{})
 
 	body := `{"event_type":"page_view","source":"landing","user_id":"u123","value":0,"created_at":"2026-03-27T12:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
@@ -22,7 +25,7 @@ func TestPostEventsAccepted(t *testing.T) {
 }
 
 func TestPostEventsValidationError(t *testing.T) {
-	router := NewRouter(NewInMemoryEventService())
+	router := NewRouter(eventServiceStub{})
 
 	body := `{"source":"landing","user_id":"u123","value":1,"created_at":"2026-03-27T12:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
@@ -40,7 +43,7 @@ func TestPostEventsValidationError(t *testing.T) {
 }
 
 func TestPostEventsRejectsMultipleJSONObjects(t *testing.T) {
-	router := NewRouter(NewInMemoryEventService())
+	router := NewRouter(eventServiceStub{})
 
 	body := `{"event_type":"page_view","source":"landing","user_id":"u123","value":1,"created_at":"2026-03-27T12:00:00Z"}{"event_type":"click","source":"landing","user_id":"u124","value":2,"created_at":"2026-03-27T12:00:01Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
@@ -58,7 +61,7 @@ func TestPostEventsRejectsMultipleJSONObjects(t *testing.T) {
 }
 
 func TestHealthz(t *testing.T) {
-	router := NewRouter(NewInMemoryEventService())
+	router := NewRouter(eventServiceStub{})
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -71,7 +74,7 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestMetricsEndpoint(t *testing.T) {
-	router := NewRouter(NewInMemoryEventService())
+	router := NewRouter(eventServiceStub{})
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()
@@ -85,4 +88,10 @@ func TestMetricsEndpoint(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "metrics are not implemented yet") {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
+}
+
+type eventServiceStub struct{}
+
+func (eventServiceStub) Accept(context.Context, event.Event) error {
+	return nil
 }
