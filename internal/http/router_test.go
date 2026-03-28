@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"metrics-batch-collector/internal/event"
+	appmetrics "metrics-batch-collector/internal/metrics"
 )
 
 func TestPostEventsAccepted(t *testing.T) {
-	router := NewRouter(eventServiceStub{})
+	router := NewRouter(eventServiceStub{}, appmetrics.NewRegistry())
 
 	body := `{"event_type":"page_view","source":"landing","user_id":"u123","value":0,"created_at":"2026-03-27T12:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
@@ -25,7 +26,7 @@ func TestPostEventsAccepted(t *testing.T) {
 }
 
 func TestPostEventsValidationError(t *testing.T) {
-	router := NewRouter(eventServiceStub{})
+	router := NewRouter(eventServiceStub{}, appmetrics.NewRegistry())
 
 	body := `{"source":"landing","user_id":"u123","value":1,"created_at":"2026-03-27T12:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
@@ -43,7 +44,7 @@ func TestPostEventsValidationError(t *testing.T) {
 }
 
 func TestPostEventsRejectsMultipleJSONObjects(t *testing.T) {
-	router := NewRouter(eventServiceStub{})
+	router := NewRouter(eventServiceStub{}, appmetrics.NewRegistry())
 
 	body := `{"event_type":"page_view","source":"landing","user_id":"u123","value":1,"created_at":"2026-03-27T12:00:00Z"}{"event_type":"click","source":"landing","user_id":"u124","value":2,"created_at":"2026-03-27T12:00:01Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(body))
@@ -61,7 +62,7 @@ func TestPostEventsRejectsMultipleJSONObjects(t *testing.T) {
 }
 
 func TestHealthz(t *testing.T) {
-	router := NewRouter(eventServiceStub{})
+	router := NewRouter(eventServiceStub{}, appmetrics.NewRegistry())
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +75,14 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestMetricsEndpoint(t *testing.T) {
-	router := NewRouter(eventServiceStub{})
+	registry := appmetrics.NewRegistry()
+	router := NewRouter(eventServiceStub{}, registry)
+
+	eventRequest := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(
+		`{"event_type":"page_view","source":"landing","user_id":"u123","value":1,"created_at":"2026-03-27T12:00:00Z"}`,
+	))
+	eventRecorder := httptest.NewRecorder()
+	router.ServeHTTP(eventRecorder, eventRequest)
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	rec := httptest.NewRecorder()
@@ -85,7 +93,16 @@ func TestMetricsEndpoint(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	if !strings.Contains(rec.Body.String(), "metrics are not implemented yet") {
+	body := rec.Body.String()
+	if !strings.Contains(body, "http_requests_total{method=\"POST\",path=\"/events\",status=\"202\"} 1") {
+		t.Fatalf("expected POST /events request metric, got body: %s", body)
+	}
+
+	if !strings.Contains(body, "events_received_total 1") {
+		t.Fatalf("expected events_received_total metric, got body: %s", body)
+	}
+
+	if !strings.Contains(body, "# HELP http_request_duration_seconds Duration of HTTP requests in seconds.") {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
 }

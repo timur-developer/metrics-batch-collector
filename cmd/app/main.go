@@ -13,6 +13,7 @@ import (
 	"metrics-batch-collector/internal/batcher"
 	"metrics-batch-collector/internal/config"
 	apphttp "metrics-batch-collector/internal/http"
+	appmetrics "metrics-batch-collector/internal/metrics"
 	"metrics-batch-collector/internal/storage/clickhouse"
 )
 
@@ -35,11 +36,12 @@ func main() {
 		}
 	}()
 
-	eventBatcher := batcher.New(repository, cfg.BatchSize, cfg.FlushInterval)
+	metricsRegistry := appmetrics.NewRegistry()
+	eventBatcher := batcher.New(repository, cfg.BatchSize, cfg.FlushInterval, metricsRegistry)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
-		Handler:           apphttp.NewRouter(eventBatcher),
+		Handler:           apphttp.NewRouter(eventBatcher, metricsRegistry),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

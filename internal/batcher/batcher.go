@@ -3,10 +3,12 @@ package batcher
 import (
 	"context"
 	"errors"
+	"log"
 	"sync"
 	"time"
 
 	"metrics-batch-collector/internal/event"
+	appmetrics "metrics-batch-collector/internal/metrics"
 	"metrics-batch-collector/internal/storage"
 )
 
@@ -19,6 +21,7 @@ type Batcher struct {
 	repository    storage.Repository
 	batchSize     int
 	flushInterval time.Duration
+	metrics       *appmetrics.Registry
 	input         chan event.Event
 
 	mu     sync.RWMutex
@@ -27,11 +30,12 @@ type Batcher struct {
 	done chan struct{}
 }
 
-func New(repository storage.Repository, batchSize int, flushInterval time.Duration) *Batcher {
+func New(repository storage.Repository, batchSize int, flushInterval time.Duration, registry *appmetrics.Registry) *Batcher {
 	b := &Batcher{
 		repository:    repository,
 		batchSize:     batchSize,
 		flushInterval: flushInterval,
+		metrics:       registry,
 		input:         make(chan event.Event, batchSize),
 		done:          make(chan struct{}),
 	}
@@ -117,5 +121,13 @@ func (b *Batcher) flush(ctx context.Context, buffer []event.Event) error {
 	}
 
 	batch := append([]event.Event(nil), buffer...)
-	return b.repository.InsertBatch(ctx, batch)
+	if err := b.repository.InsertBatch(ctx, batch); err != nil {
+		b.metrics.IncClickHouseInsertErrors()
+		log.Printf("flush batch failed: size=%d error=%v", len(batch), err)
+		return err
+	}
+
+	b.metrics.ObserveBatchFlush(len(batch))
+	log.Printf("flushed batch: size=%d", len(batch))
+	return nil
 }

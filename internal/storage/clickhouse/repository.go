@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2"
@@ -37,6 +38,7 @@ func (r *Repository) InsertBatch(ctx context.Context, events []event.Event) erro
 	query, args := buildInsertQuery(events)
 
 	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+		log.Printf("clickhouse insert batch failed: size=%d error=%v", len(events), err)
 		return fmt.Errorf("insert batch: %w", err)
 	}
 

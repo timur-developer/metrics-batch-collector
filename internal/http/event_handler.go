@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"metrics-batch-collector/internal/event"
+	appmetrics "metrics-batch-collector/internal/metrics"
 )
 
 type EventHandler struct {
 	service EventService
+	metrics *appmetrics.Registry
 }
 
 type eventRequest struct {
@@ -24,22 +27,28 @@ type eventRequest struct {
 	CreatedAt *time.Time `json:"created_at"`
 }
 
-func NewEventHandler(service EventService) *EventHandler {
-	return &EventHandler{service: service}
+func NewEventHandler(service EventService, registry *appmetrics.Registry) *EventHandler {
+	return &EventHandler{
+		service: service,
+		metrics: registry,
+	}
 }
 
 func (h *EventHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	evt, err := decodeEvent(r)
 	if err != nil {
+		log.Printf("event request validation failed: remote=%s error=%v", r.RemoteAddr, err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := h.service.Accept(r.Context(), evt); err != nil {
+		log.Printf("event request accept failed: remote=%s error=%v", r.RemoteAddr, err)
 		writeError(w, http.StatusInternalServerError, "failed to accept event")
 		return
 	}
 
+	h.metrics.IncEventsReceived()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
