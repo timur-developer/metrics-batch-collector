@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metrics-batch-collector-config
+data:
+  HTTP_PORT: "8080"
+  CLICKHOUSE_DSN: "clickhouse://app:app@clickhouse:9000/default"
+  BATCH_SIZE: "100"
+  FLUSH_INTERVAL: "5s"
+  LOG_LEVEL: "info"
